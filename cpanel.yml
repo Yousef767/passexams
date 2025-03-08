@@ -1,0 +1,48 @@
+name: Deploy Laravel App to cPanel
+
+on:
+  push:
+    branches:
+      - main # Trigger deployment when pushing to the main branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1' # Use the PHP version required by your Laravel app
+          extensions: mbstring, xml, ctype, json, tokenizer, openssl, pdo_mysql # Add required PHP extensions
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --prefer-dist --optimize-autoloader
+
+      - name: Compile assets (if applicable)
+        run: |
+          npm install
+          npm run prod
+
+      - name: Upload files to cPanel
+        uses: SamKirkland/FTP-Deploy-Action@v4
+        with:
+          server: ${{ secrets.CPANEL_FTP_SERVER }} # FTP server address
+          username: ${{ secrets.CPANEL_FTP_USERNAME }} # FTP username
+          password: ${{ secrets.CPANEL_FTP_PASSWORD }} # FTP password
+          local-dir: ./ # Local directory to upload
+          server-dir: /public_html # Remote directory on cPanel (adjust as needed)
+
+      - name: Run migrations (optional)
+        run: |
+          ssh ${{ secrets.CPANEL_SSH_USER }}@${{ secrets.CPANEL_SSH_HOST }} "cd /home/username/public_html && php artisan migrate --force"
+        # Replace /home/username/public_html with the correct path to your Laravel app on the server
+        # Ensure SSH access is enabled on your cPanel account
+
+      - name: Clear Laravel cache
+        run: |
+          ssh ${{ secrets.CPANEL_SSH_USER }}@${{ secrets.CPANEL_SSH_HOST }} "cd /home/username/public_html && php artisan optimize:clear"
